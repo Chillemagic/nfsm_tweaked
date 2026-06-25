@@ -34,29 +34,77 @@ def run_fullscreen_cmd(window_id, ):
     )
 
 def run_full_width_cmd(window_id):
+ 
+    column = fullscreen_windows[window_id]["position"][0]
+    workspace_id = fullscreen_windows[window_id]["workspace_id"]
+    stacked = False
 
-    max_width =  subprocess.run(
-                    ["niri", "msg", "action", "set-window-width", "100%", "--id" str(window_id)]
-                )
+
+    for other_id, data in window_positions.items():
+
+        if other_id == window_id:
+            continue
+
+        if (
+            data["position"][0] == column 
+            and data["workspace_id"] == workspace_id
+        ):
+
+            stacked = True
+            break
+
+    if stacked: 
+        subprocess.run(
+            ["niri", "msg", "action", "consume-or-expel-window-right", "--id", str(window_id)]
+        )
+    
+
+    subprocess.run(
+        ["niri", "msg", "action", "set-window-width", "100%", "--id", str(window_id)]
+    )
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     # capture column number
     column = fullscreen_windows[window_id]["position"][0]
     workspace_id = fullscreen_windows[window_id]["workspace_id"]
 
     # 1. Determine if window is in a stacked column
-    Iterrate through 
-    for window in window_positions
+    # Iterate through 
+    for window in window_positions:
+        if window == window_id:
+            continue
         # window_id:(col, row)
-        if window["position"][0] == column && window["workspace_id"] == workspace_id
+        if window["position"][0] == column and window["workspace_id"] == workspace_id:
             # Window belongs to a stack and needs to be removed first
             subprocess.run(
-                ["niri", "msg", "action", "consume-or-expel-window-right", "--id" str(window_id)]
+                ["niri", "msg", "action", "consume-or-expel-window-right", "--id", str(window_id)]
             )
-
-    # 2. if window is in stack: 
     
-
     # Then run width
-    max_width
+    subprocess.run(
+        ["niri", "msg", "action", "set-window-width", "100%", "--id", str(window_id)]
+    )
+    
 
 
 def restore_window_cmd(window_id,wi)
@@ -81,7 +129,7 @@ def handle_fullscreen_request():
     window_id = json.loads(props.stdout)["id"]
 
     # the window is exiting fullscreen
-    # Checks if window exists in fullscreen_winsdows list defined at the top
+    # Checks if window exists in fullscreen_windows list defined at the top
     if window_id in fullscreen_windows:
         fullscreen_windows[window_id]["exit"] = True
         # trigger a niri window layouts changed event
