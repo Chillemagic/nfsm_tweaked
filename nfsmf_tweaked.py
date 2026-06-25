@@ -82,8 +82,6 @@ def run_full_width_cmd(window_id):
 
 
 
-
-
     # capture column number
     column = fullscreen_windows[window_id]["position"][0]
     workspace_id = fullscreen_windows[window_id]["workspace_id"]
