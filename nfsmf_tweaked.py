@@ -11,7 +11,7 @@ import threading
 
 # tracks current position (column/row) of all windows { window_id -> (col, row) }
 window_positions = {}
-# dict that tracks fullscreen windows and their restore positions { window_id -> { position: (col, row), exit: Bool, window_width } }
+# dict that tracks fullscreen windows and their restore positions { window_id -> { position: (col, row), expanded: Bool, window_width } }
 fullscreen_windows = {}
 
 def main():
@@ -27,18 +27,17 @@ def main():
     except KeyboardInterrupt:
         sys.exit()
 
-def run_fullscreen_cmd(window_id, ):
-    subprocess.run(
-        # niri msg action command --id window_id
-        ["niri", "msg", "action", "fullscreen-window", "--id", str(window_id)]
-    )
+    def run_fullscreen_cmd(window_id, ):
+        subprocess.run(
+            # niri msg action command --id window_id
+            ["niri", "msg", "action", "fullscreen-window", "--id", str(window_id)]
+        )
 
 def run_full_width_cmd(window_id):
  
     column = fullscreen_windows[window_id]["position"][0]
     workspace_id = fullscreen_windows[window_id]["workspace_id"]
-    stacked = False
-
+    stacked = fullscreen_windows[window_id]["stacked"]
 
     for other_id, data in window_positions.items():
 
@@ -60,63 +59,21 @@ def run_full_width_cmd(window_id):
     
 
     subprocess.run(
-        ["niri", "msg", "action", "set-window-width", "100%", "--id", str(window_id)]
+        ["niri", "msg", "action", "set-window-width", "100%"]
     )
     
+def restore_window_cmd(window_id):
 
+    # window = fullscreen_windows[window_id]
+    # width = window["width"]
+    # stacked = window["stacked"]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # capture column number
-    column = fullscreen_windows[window_id]["position"][0]
-    workspace_id = fullscreen_windows[window_id]["workspace_id"]
-
-    # 1. Determine if window is in a stacked column
-    # Iterate through 
-    for window in window_positions:
-        if window == window_id:
-            continue
-        # window_id:(col, row)
-        if window["position"][0] == column and window["workspace_id"] == workspace_id:
-            # Window belongs to a stack and needs to be removed first
-            subprocess.run(
-                ["niri", "msg", "action", "consume-or-expel-window-right", "--id", str(window_id)]
-            )
-    
-    # Then run width
     subprocess.run(
-        ["niri", "msg", "action", "set-window-width", "100%", "--id", str(window_id)]
+        ["niri", "msg", "action", "set-window-width", str(width)]
     )
     
-
-
-def restore_window_cmd(window_id,wi)
 
 def handle_fullscreen_request():
-    # get focused window and capture output, example of JSON:
-    
-    # >>> json.loads(props.stdout)
-    # {'id': 5, 'title': '~: python - python', 'app_id': 'kitty', 
-    # 'pid': 2481, 'workspace_id': 2, 'is_focused': True, 'is_floating': False, 
-    # 'is_urgent': False, 'layout': {'pos_in_scrolling_layout': [2, 1],
-    #  'tile_size': [672.0, 868.0], 'window_size': [672, 868], '
-    # tile_pos_in_workspace_view': None, 'window_offset_in_tile': [0.0, 0.0]},
-    #  'focus_timestamp': {'secs': 231, 'nanos': 64545284}}
 
     props = subprocess.run(
         ["niri", "msg", "--json", "focused-window"],
@@ -129,7 +86,7 @@ def handle_fullscreen_request():
     # the window is exiting fullscreen
     # Checks if window exists in fullscreen_windows list defined at the top
     if window_id in fullscreen_windows:
-        fullscreen_windows[window_id]["exit"] = True
+        fullscreen_windows[window_id]["expanded"] = True
         # trigger a niri window layouts changed event
         restore_window_cmd(window_id)
         return
@@ -142,10 +99,14 @@ def handle_fullscreen_request():
 
         
         col, row = window_positions[window_id]["position"]
+        workspace_id = window_positions[window_id]["workspace_id"]
         fullscreen_windows[window_id] = {
             "position": (col, row),
-            "width": window_width
-            "exit": False
+            "restore_row": (row),
+            "width": window_width,
+            "expanded": False,
+            "stacked": False,
+            "workspace_id": workspace_id
         }
         run_full_width_cmd(window_id)
 
@@ -226,7 +187,7 @@ def nfsm_stream():
                     continue  # skip floating windows
                 window_positions[window_id] = {
                     "workspace_id": workspace_id,
-                    "position" = tuple(pos)
+                    "position": tuple(pos)
                 }
 
         # it occurs when a window is closed; only the id is available
@@ -257,6 +218,10 @@ def nfsm_stream():
             window_id = change[0]
             window_data = change[1]
 
+            # 3,{"pos_in_scrolling_layout":[2,1],"tile_size":[672.0,868.0],
+            # "window_size":[672,868],
+            # "tile_pos_in_workspace_view":null,"window_offset_in_tile":[0.0,0.0]}
+
             try:
                 col, row = window_data["pos_in_scrolling_layout"]
             except TypeError:
@@ -264,13 +229,13 @@ def nfsm_stream():
                 continue
 
             # move the window to the last recorded position when necessary
-            if window_id in fullscreen_windows and fullscreen_windows[window_id]["exit"]:
+            if window_id in fullscreen_windows and fullscreen_windows[window_id]["expanded"]:
                 dest_col, dest_row = fullscreen_windows[window_id]["position"]
                 # move window to the right column if necessary
                 if dest_col < col:
                     niri_cmd("consume-or-expel-window-left")
                     continue
-                # the window is already in the right column, we now need to move it to the correct row
+                # the window is already in the right column, zwe now need to move it to the correct row
                 if dest_row != row:
                     for _ in range(row - dest_row):
                         niri_cmd("move-window-up")
