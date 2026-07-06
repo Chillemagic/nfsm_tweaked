@@ -27,11 +27,12 @@ def main():
     except KeyboardInterrupt:
         sys.exit()
 
-    def run_fullscreen_cmd(window_id, ):
-        subprocess.run(
-            # niri msg action command --id window_id
-            ["niri", "msg", "action", "fullscreen-window", "--id", str(window_id)]
-        )
+def run_fullscreen_cmd(window_id, mark_expanded=False):
+    if mark_expanded and window_id in fullscreen_windows:
+        fullscreen_windows[window_id]["expanded"] = True
+    subprocess.run(
+        ["niri", "msg", "action", "fullscreen-window", "--id", str(window_id)]
+    )
 
 def run_full_width_cmd(window_id):
  
@@ -63,31 +64,34 @@ def run_full_width_cmd(window_id):
     )
     
 def restore_window_cmd(window_id):
-
-    # window = fullscreen_windows[window_id]
-    # width = window["width"]
-    # stacked = window["stacked"]
+    window = fullscreen_windows[window_id]
+    width = window["width"]
 
     subprocess.run(
         ["niri", "msg", "action", "set-window-width", str(width)]
     )
-    
 
-def handle_fullscreen_request():
+
+def handle_request(cmd):
 
     props = subprocess.run(
         ["niri", "msg", "--json", "focused-window"],
         capture_output=True,
         text=True,
     )
-    # Fetches window id and sends to run_fullscreen_cmd method
-    window_id = json.loads(props.stdout)["id"]
+    window = json.loads(props.stdout)
+    window_id = window["id"]
 
     # the window is exiting fullscreen
     # Checks if window exists in fullscreen_windows list defined at the top
     if window_id in fullscreen_windows:
+        if cmd == "FullscreenRequest":
+            # Mark expanded so the event loop restores the original position
+            # after Niri exits fullscreen.
+            run_fullscreen_cmd(window_id, mark_expanded=True)
+            return
+
         fullscreen_windows[window_id]["expanded"] = True
-        # trigger a niri window layouts changed event
         restore_window_cmd(window_id)
         return
 
@@ -95,7 +99,7 @@ def handle_fullscreen_request():
 
     if window_id in window_positions:
 
-        window_width = json.loads(props.stdout)["layout"]["window_size"][0]
+        window_width = window["layout"]["window_size"][0]
 
         
         col, row = window_positions[window_id]["position"]
@@ -108,6 +112,11 @@ def handle_fullscreen_request():
             "stacked": False,
             "workspace_id": workspace_id
         }
+
+        if cmd == "FullscreenRequest":
+            run_fullscreen_cmd(window_id)
+            return
+
         run_full_width_cmd(window_id)
 
 def nfsm_socket():
@@ -139,8 +148,8 @@ def nfsm_socket():
             data = client_socket.recv(1024)
             if data:
                 cmd = data.decode('utf-8').strip()
-                if cmd == "FullscreenRequest":
-                    handle_fullscreen_request()
+                if cmd == "FullscreenRequest" or cmd == "FullWidthRequest":
+                    handle_request(cmd)
         except socket.error as e:
             print(f"Socket error: {e}")
         finally:
